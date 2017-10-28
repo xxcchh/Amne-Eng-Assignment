@@ -1,47 +1,63 @@
 import React, {Component} from 'react';
 import './Distance.css';
 
+/*
+* Result class
+* */
 class result {
- constructor (addrA, addrB){
-    this.A = addrA
-    this.B = addrB
-    this.num = 1
+ constructor (estateName, number, addrA, addrB){
+   this.name = estateName
+   this.num = number
+   this.distanceA = addrA
+   this.distanceB = addrB
  }
 }
 
-let res;
-
-let mike = {
-  number: 1,
-  name: 'Mike',
-  distance: 101,
-  printDistance(){
-    console.log(`The distance is ${this.distance}`)
+/*
+* History class
+* */
+class history extends result{
+  constructor (estateName, distanceA, distanceB, addrA, addrB){
+    super(estateName, 1, distanceA, distanceB);
+    this.addrA = addrA;
+    this.addrB = addrB;
   }
 }
-
-let join = {
-  number: 2,
-  name: 'John',
-  distance: 200,
-  printDistance(){
-    console.log(`The distance is ${this.distance}`)
-  }
-}
-
-let users = [mike, join];
 
 /*
-* Main function for the web portal
+* Function to show alert messages
+* */
+function ShowAlert(props){
+  if (props.alert === -1){
+    return <div className="alert alert-danger" align="center">
+      Please input both addresses correctly!
+    </div>
+  }else if (props.alert === 1){
+    return <div className="alert alert-warning" align="center">
+      The addresses have been searched!
+    </div>
+  }else if (props.alert === 0){
+    return <div className="alert alert-success" align="center">
+      The result is successfully found!
+    </div>
+  }
+  return <div className="alert alert-primary" align="center">Please input two addresses! </div>
+}
+
+/*
+* Main function for the web app
 * */
 class Distance extends Component{
 
   constructor (props){
     super(props);
     this.calculateAddr = this.calculateAddr.bind(this);
-    this.changeAddr = this.changeAddr.bind(this);
     this.state = {
-      addrA: 'Undefined',
+      addrA: undefined,
+      addrB: undefined,
+      res: [],
+      hist: [],
+      alert: 2
     };
   }
 
@@ -49,31 +65,60 @@ class Distance extends Component{
     e.preventDefault();
     let addrA = e.target.elements.addrA.value.trim();
     let addrB = e.target.elements.addrB.value.trim();
-    res = new result(addrA, addrB);
-    console.log(res);
+    console.log("A: " + addrA + " B: " + addrB);
+    if (addrA === "" || addrB === ""){
+        this.setState(() => {
+          return {
+            alert: -1
+          };
+        });
+    }else{
+      let isFound = this.state.hist.some((e) => {
+        return e.addrB === addrB && e.addrA === addrA
+      })
+      //TODO get the list of real estates within 10 miles of each addresses
+      let mike = new result("Whole Foods", 1, 2, 3);
+      let join = new result("Foot Locker", 2, 3, 5);
+      let tmpRes = [mike, join];
+      let tmpHist = new history(tmpRes[0].name, tmpRes[0].distanceA, tmpRes[0].distanceB, addrA, addrB);
+      this.setState((prev) => {
+          return{
+          alert: isFound? 1: 0,
+          res: tmpRes,
+          hist: isFound? prev.hist: [tmpHist].concat(prev.hist)
+        };
+      });
+    }
   };
-
-  changeAddr(){
-    this.setState((prev) => {
-      return {
-        addrA: "Defined"
-      };
-    });
-  }
 
   render(){
     return (
-      <div className="row function">
-        <p>A: {this.state.addrA}</p>
-       <button onClick={this.changeAddr}> change </button>
-        <div className="col-md-4">
-          <AddForm calculateAddr={this.calculateAddr}/>
+      <div className="container-fluid function">
+        <div className="row">
+          <div className="col-md-12">
+            <ShowAlert alert={this.state.alert}/>
+          </div>
         </div>
-        <div className="col-md-4">
-          <GetResult />
-        </div>
-        <div className="col-md-4">
-          <GetHistory res={res}/>
+        <div className="row">
+          <div className="col-md-4">
+            <h3>Panel</h3>
+            <AddForm
+              calculateAddr={this.calculateAddr}
+            />
+            <p>Google Map</p>
+          </div>
+          <div className="col-md-4">
+            <h3>Result</h3>
+            <GetResult
+              res={this.state.res}
+            />
+          </div>
+          <div className="col-md-4">
+            <h3>History</h3>
+            <GetHistory
+              hist={this.state.hist}
+            />
+          </div>
         </div>
       </div>
     );
@@ -81,17 +126,11 @@ class Distance extends Component{
 
 }
 
-/*Address form to use.
+/*Address form to use
 * */
 class AddForm extends Component{
-
-  constructor (props){
-    super(props);
-    this.calculateAddr = this.props.calculateAddr;
-  }
-
   render() {
-        return (<form className="form-inline" onSubmit={this.calculateAddr}>
+        return (<form className="form-inline" onSubmit={this.props.calculateAddr}>
           <span className="badge badge-pill badge-success">A</span>
           <div className="form-group mx-sm-4">
             <label className="sr-only">Address of A</label>
@@ -105,11 +144,10 @@ class AddForm extends Component{
           <button type="submit" className="btn btn-outline-primary">Confirm</button>
         </form>);
   }
-
 }
 
 /*
-* Result table to use.
+* Result table to use
 * */
 class GetResult extends Component{
   render() {
@@ -118,46 +156,50 @@ class GetResult extends Component{
       <tr>
         <th>#</th>
         <th>Name</th>
-        <th>Distance</th>
+        <th>Distance From A</th>
+        <th>Distance From B</th>
       </tr>
       </thead>
       <tbody>
-      {users.map((p) =>{
+      {this.props.res.length > 0 && (this.props.res.map((p) =>{
         return (
-          <tr key={p.number}>
-            <td>{p.number}</td>
+          <tr key={p.num}>
+            <td>{p.num}</td>
             <td>{p.name}</td>
-            <td>{p.distance}</td>
+            <td>{p.distanceA}</td>
+            <td>{p.distanceB}</td>
           </tr>
         )
-      })}
+      }))}
       </tbody>
     </table>
   );
   }
 }
 
-/*History table to store the result.
+/*History table to store the result
 * */
 class GetHistory extends Component{
-    constructor (props){
-      super(props);
-      this.p = this.props.res;
-    }
     render() {
       return(<table className="table">
         <thead className="thead-dark">
         <tr>
-          <th>#</th>
           <th>Name</th>
-          <th>Distance</th>
+          <th>Address of A</th>
+          <th>Address of B</th>
+          <th>Distance From A</th>
+          <th>Distance From B</th>
         </tr>
         </thead>
         <tbody>
-        {this.p &&
-        <tr key={this.p.num}><td>{this.p.A}</td>
-          <td>{this.p.B}</td><td>{this.p.distance}</td></tr>
-        }
+        {this.props.hist.length > 0 && (this.props.hist.map((p) => {
+          return (<tr key={p.num}>
+            <td>{p.name}</td>
+            <td>{p.addrA}</td>
+            <td>{p.addrB}</td>
+            <td>{p.distanceA}</td>
+            <td>{p.distanceB}</td>
+          </tr>)}))}
         </tbody>
       </table>
     );

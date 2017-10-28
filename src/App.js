@@ -14,7 +14,6 @@ class App extends Component {
       <div className="App">
         <header className="App-header">
           <img src={company} className="App-company" alt="amne" size="20x20" />
-          <h1 className="App-title">Welcome to Amne</h1>
         </header>
         {getHello()}
       </div>
