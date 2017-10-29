@@ -10,12 +10,17 @@ const fetch = require("isomorphic-fetch");
 * Result class
 * */
 class result {
- constructor (id, estateName, number, addrA, addrB){
-   this.id;
+ constructor (id, address, estateName, number, addrA, addrB){
+   this.id = id;
+   this.address = address;
    this.name = estateName
    this.num = number
    this.distanceA = addrA
    this.distanceB = addrB
+   this.sum = (Number(addrA) + Number(addrB)).toPrecision(5);
+ }
+ setNumber(num){
+   this.num = num;
  }
 }
 
@@ -26,7 +31,7 @@ class geodata {
     this.id = id
     this.addr = addr
     this.lat = lat
-    this.lgn = lgn
+    this.lng = lgn
     this.miniaddr = miniaddr
   }
 }
@@ -64,7 +69,7 @@ class Distance extends Component{
     this.resetAddr = this.resetAddr.bind(this);
     this.getList = this.getList.bind(this);
     this.calculateAddr = this.calculateAddr.bind(this);
-    this.onChange = (address) => this.setState({address});
+    this.getResult = this.getResult.bind(this);
     this.state = {
       addrA: undefined,
       addrB: undefined,
@@ -92,6 +97,32 @@ class Distance extends Component{
     }
     let sNew = s.split(" ").join("+");
     return sNew;
+  }
+
+  // To Radius
+  static toRad(x){
+    return x * Math.PI / 180;
+  }
+
+  // Get the distance
+  static getDistance(geoA, geoB){
+    let lat1 = geoA.lat, lat2 = geoB.lat, lng1 = geoA.lng, lng2 = geoB.lng;
+    let earthRadius = 3958.75;
+    let dLat = Distance.toRad(lat2-lat1);
+    let dLng = Distance.toRad(lng2-lng1);
+    let sindLat = Math.sin(dLat / 2);
+    let sindLng = Math.sin(dLng / 2);
+    let a = Math.pow(sindLat, 2) + Math.pow(sindLng, 2)
+      * Math.cos(Distance.toRad(lat1)) * Math.cos(Distance.toRad(lat2));
+    let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    let dist = earthRadius * c / 1.60934 ;
+    return dist.toPrecision(5);
+  }
+
+  // Get result
+  getResult(geoTemp, idx, geoA, geoB){
+    return new result(geoTemp.id, geoTemp.address, geoTemp.miniaddr, idx,
+            Distance.getDistance(geoTemp, geoA), Distance.getDistance(geoTemp, geoB));
   }
 
   // Get response from google map
@@ -131,37 +162,28 @@ class Distance extends Component{
   // Get the list of places within 10 miles of each address
   getList(geo){
     let url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?key=AIzaSyDdXsj6AEHfUZDCxcmCzIW9r_7AuR5kG2g" +
-      "&hasNextPage=true&nextPage()=true&sensor=false&type=real_estate_agency&radius=16093.4&location=";
+      "&type=real_estate_agency&radius=16093.4&location=";
     let lat = geo.lat;
-    let lgn = geo.lgn;
-    let urlNew = url + lat + "," + lgn;
-    // let urlNew = url + "30.273067" + "," + "-97.754059";
-    // console.log("url to use:" +   urlNew);
-    let proxyURL = 'https://cors-anywhere.herokuapp.com';
-    let requestURL = urlNew;
-    let request = new XMLHttpRequest();
-    request.open('GET', proxyURL + '/' + requestURL, true);
-    request.responseType = 'json';
-    request.send();
-    let res = [];
-    request.onload = function() {
-      let data = request.response;
-      console.log(data);
-      if (data.results.length > 0 && data.status === "OK"){
-         let tmp = data.results;
-         console.log(tmp);
-         res = tmp.map((t) => {
-
-         })
+    let lng = geo.lng;
+    let requestURL = url + lat + "," + lng;
+    let proxyURL = "https://young-headland-85340.herokuapp.com/";
+    let tmpURL = proxyURL + requestURL;
+    return fetch(tmpURL)
+      .then(res => res.json())
+      .then(data => {
+      if (data.results.length > 0 && data.status === "OK") {
+        let tmp = data.results;
+        return tmp.map((t) => {
+          return new geodata(t.place_id, t.vicinity, t.geometry.location.lat, t.geometry.location.lng, t.name);
+        });
       }
-    }
-
-
+    });
   }
 
   // Calculate to get the nearest places
   calculateAddr(e) {
     e.preventDefault();
+    this.resetAddr();
 
     let addrARaw = e.target.elements.addrA.value.trim();
     let addrBRaw = e.target.elements.addrB.value.trim();
@@ -175,20 +197,41 @@ class Distance extends Component{
     }else{
       let res = this.getGeo(addrARaw, addrBRaw);
       if (res.valid){
-        let geoARes = res.geoA.then(data => {
-          return data === undefined? undefined: this.getList(data);
+        let geoRes = Promise.all([res.geoA, res.geoB]);
+        geoRes.then((arr) => {
+            let geoARes = arr[0] === undefined? undefined: this.getList(arr[0]);
+            let geoBRes = arr[1] === undefined? undefined: this.getList(arr[1]);
+            let geoList = Promise.all([geoARes, geoBRes]);
+            // console.log(geoList);
+            geoList.then((g) => {
+              if (g[0] === undefined ||
+                      g[1] === undefined){
+                this.setState(() => {
+                  return {
+                    alert: 2
+                  }
+                });
+              }else{
+                // Add A list
+                g[0].forEach((v) => {
+                  this.setState((prev) => {
+                    return {
+                      res: prev.res.concat([this.getResult(v, this.state.res.length, arr[0], arr[1])])
+                    }
+                  })
+                })
+                // Add B list
+                g[1].forEach((v, i) => {
+                  this.setState((prev) => {
+                    return {
+                      res: prev.res.concat([this.getResult(v, this.state.res.length, arr[0], arr[1])])
+                    }
+                  })
+                })
+              }
+            })
         });
 
-        let mike = new result("A", "Whole Foods", 1, 2, 3);
-        let join = new result("B", "Foot Locker", 2, 3, 5);
-
-        let tmpRes = [mike, join];
-        this.setState((prev) => {
-          return{
-            alert: 0,
-            res: tmpRes,
-          };
-        });
       }else{
         this.setState(() => {
           return {
@@ -221,7 +264,8 @@ class Distance extends Component{
             </div>
           </div>
           <div className="col-md-6">
-            <h3>Result</h3>
+            <h3>Result <span className="badge badge-secondary">
+                    {this.state.res.length}</span> </h3>
             <GetResult
               res={this.state.res}
             />
@@ -238,7 +282,8 @@ class Distance extends Component{
 * */
 const GoogleMapComponent = compose(
   withProps({
-    googleMapURL: "https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=geometry,drawing,places&",
+    googleMapURL: "https://maps.googleapis.com/maps/api/js?v=3.exp&key=AIzaSyCDZeqFRYtHY5YdQsXwdK2HUKtXS_SzwLg" +
+                  "&libraries=geometry,drawing,places",
     loadingElement: <div style={{height: `100%`}}/>,
     containerElement: <div style={{width: `725px`, height: `500px`}}/>,
     mapElement: <div style={{height: `100%`}}/>
@@ -307,16 +352,6 @@ class AddForm extends Component{
             <input type="text" className="form-control" placeholder="Address of B" name="addrB"/>
           </div>
           <button type="submit" className="btn btn-outline-primary">Confirm</button>
-
-          {/*<Autocomplete*/}
-            {/*style={{width: '90%'}}*/}
-            {/*onPlaceSelected={(place) => {*/}
-              {/*console.log(place);*/}
-            {/*}}*/}
-            {/*types={['(regions)']}*/}
-            {/*componentRestrictions={{country: "us"}}*/}
-          {/*/>*/}
-
         </form>);
   }
 }
@@ -326,8 +361,8 @@ class AddForm extends Component{
 * */
 class GetResult extends Component{
   render() {
-      return ( <table className="table">
-      <thead className="thead-light">
+      return ( <table classID="restable" className="table table-striped table-bordered">
+      <thead>
       <tr>
         <th>#</th>
         <th>Name</th>
@@ -344,7 +379,7 @@ class GetResult extends Component{
             <td>{p.name}</td>
             <td>{p.distanceA}</td>
             <td>{p.distanceB}</td>
-            <td>{p.distanceA + p.distanceB}</td>
+            <td>{p.sum}</td>
           </tr>
         )
       }))}
