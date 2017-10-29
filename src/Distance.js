@@ -1,31 +1,22 @@
-import React, {Component} from 'react';
-import {compose, withProps} from 'recompose'
-import {withScriptjs, withGoogleMap, GoogleMap, Marker} from 'react-google-maps';
-import {MarkerClusterer} from 'react-google-maps/lib/components/addons/MarkerClusterer';
-import './Distance.css';
+import React, { Component } from 'react'
+import { compose, withProps } from 'recompose'
+import { GoogleMap, Marker, withGoogleMap, withScriptjs } from 'react-google-maps'
+import './Distance.css'
+
 const fetch = require("isomorphic-fetch");
+
 
 /*
 * Result class
 * */
 class result {
- constructor (estateName, number, addrA, addrB){
+ constructor (id, estateName, number, addrA, addrB){
+   this.id;
    this.name = estateName
    this.num = number
    this.distanceA = addrA
    this.distanceB = addrB
  }
-}
-
-/*
-* History class
-* */
-class history extends result{
-  constructor (estateName, distanceA, distanceB, addrA, addrB){
-    super(estateName, 1, distanceA, distanceB);
-    this.addrA = addrA;
-    this.addrB = addrB;
-  }
 }
 
 /*Geo class
@@ -48,17 +39,13 @@ const ShowAlert = (props) => {
     return <div className="alert alert-danger" align="center">
       Please input both addresses correctly!
     </div>
-  }else if (props.alert === 1){
-    return <div className="alert alert-warning" align="center">
-      The addresses have been searched!
-    </div>
   }else if (props.alert === 0){
     return <div className="alert alert-success" align="center">
       The result is successfully found!
     </div>
   }else if (props.alert === 2){
     return <div className="alert alert-dark" align="center">
-      Can not find the address in Google Map!
+      Can not find the address in Austin, TX using Google Map!
     </div>
   }
   return <div className="alert alert-primary" align="center">Please input two addresses! </div>
@@ -72,51 +59,53 @@ class Distance extends Component{
 
   constructor (props){
     super(props);
-    this.calculateAddr = this.calculateAddr.bind(this);
     this.getGeo = this.getGeo.bind(this);
-    this.pruneAddr = this.pruneAddr.bind(this);
     this.getResponse = this.getResponse.bind(this);
+    this.resetAddr = this.resetAddr.bind(this);
+    this.getList = this.getList.bind(this);
+    this.calculateAddr = this.calculateAddr.bind(this);
+    this.onChange = (address) => this.setState({address});
     this.state = {
       addrA: undefined,
       addrB: undefined,
       res: [],
-      hist: [],
-      alert: 3
+      alert: 1
     };
   }
 
-  // Prune input address
-  pruneAddr(s){
-    // let english = /^[a-zA-Z0-9]+$/;
-    let sNew = "";
-    s.split(/[-\/\\^$*+?.()|[\]{}]/g).forEach((e) => {
-      if (e.length > 0){
-        sNew += e.split(" ").join("+");
+  // Reset address
+  resetAddr(){
+    this.setState(() => {
+      return {
+        addrA: undefined,
+        addrB: undefined,
+        res: []
       }
     });
-    // for (let i = 0; i < sNew.length; i++){
-    //   let c = sNew.charAt(i);
-    //   if (c === '+' || c === ','){
-    //     continue;
-    //   }else{
-    //     if (!english.test(sNew)){
-    //       sNew = undefined;
-    //       break;
-    //     }
-    //   }
-    // }
+  }
+
+  // Prune input address
+  static pruneAddr(s){
+    let exp = /[-\/\\^$*+?.()|[\]{}]/g;
+    if (exp.test(s)){
+      return undefined;
+    }
+    let sNew = s.split(" ").join("+");
     return sNew;
   }
 
   // Get response from google map
   getResponse(url){
     let res;
+    let defaultAddr = "Austin, TX, USA";
     res = fetch(url).then(res => res.json()).then(data => {
-      if (data.status === "OK"){
+      // console.log(data);
+      if (data.status === "OK" && data.results.length > 0 &&
+                data.results[0].formatted_address !== defaultAddr){
         let loc =  data.results[0].geometry.location;
         let id = data.results[0].place_id;
         let address = data.results[0].formatted_address;
-        return new geodata(id, address, loc.lat, loc.lng, address);
+       return new geodata(id, address, loc.lat, loc.lng, address);
       }
     });
     return res;
@@ -124,66 +113,92 @@ class Distance extends Component{
 
   // Get geo location of the input data
   getGeo(A, B){
-    let url = "https://maps.googleapis.com/maps/api/geocode/json?key=AIzaSyBLmRww05E9gjXov0_hkfFw74vfYoKFLuM&address=";
-    let addrA = this.pruneAddr(A);
-    let addrB = this.pruneAddr(B);
+    let url = "https://maps.googleapis.com/maps/api/geocode/json?" +
+      "components=country:US|administrative_area:TX|locality:Austin" +
+      "&key=AIzaSyBLmRww05E9gjXov0_hkfFw74vfYoKFLuM&address=";
+    let addrA = Distance.pruneAddr(A);
+    let addrB = Distance.pruneAddr(B);
     if (addrA === undefined || addrB === undefined){
-      this.setState(() => {
-        return {
-          alert: -1
-        };
-      });
-      return false;
+      return {"valid": false, "geoA": undefined, "geoB": undefined};
     }
     let urlA = url.concat(addrA);
     let urlB = url.concat(addrB);
     let geoA = this.getResponse(urlA);
     let geoB = this.getResponse(urlB);
-    if (geoA === undefined || geoB === undefined){
-      this.setState(() => {
-        return {
-          alert: 2
-        }
-      });
+    return {"valid": true, "geoA": geoA, "geoB": geoB};
+  }
+
+  // Get the list of places within 10 miles of each address
+  getList(geo){
+    let url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?key=AIzaSyDdXsj6AEHfUZDCxcmCzIW9r_7AuR5kG2g" +
+      "&hasNextPage=true&nextPage()=true&sensor=false&type=real_estate_agency&radius=16093.4&location=";
+    let lat = geo.lat;
+    let lgn = geo.lgn;
+    let urlNew = url + lat + "," + lgn;
+    // let urlNew = url + "30.273067" + "," + "-97.754059";
+    // console.log("url to use:" +   urlNew);
+    let proxyURL = 'https://cors-anywhere.herokuapp.com';
+    let requestURL = urlNew;
+    let request = new XMLHttpRequest();
+    request.open('GET', proxyURL + '/' + requestURL, true);
+    request.responseType = 'json';
+    request.send();
+    let res = [];
+    request.onload = function() {
+      let data = request.response;
+      console.log(data);
+      if (data.results.length > 0 && data.status === "OK"){
+         let tmp = data.results;
+         console.log(tmp);
+         res = tmp.map((t) => {
+
+         })
+      }
     }
+
 
   }
 
   // Calculate to get the nearest places
   calculateAddr(e) {
     e.preventDefault();
-    let addrA = e.target.elements.addrA.value.trim();
-    let addrB = e.target.elements.addrB.value.trim();
-    // console.log("A: " + addrA + " B: " + addrB);
-    if (addrA === "" || addrB === ""){
+
+    let addrARaw = e.target.elements.addrA.value.trim();
+    let addrBRaw = e.target.elements.addrB.value.trim();
+    if (addrARaw === "" || addrBRaw === ""){
         this.setState(() => {
           return {
             alert: -1
           };
         });
+        this.resetAddr();
     }else{
-      let isFound = this.state.hist.some((e) => {
-        return e.addrB === addrB && e.addrA === addrA
-      })
+      let res = this.getGeo(addrARaw, addrBRaw);
+      if (res.valid){
+        let geoARes = res.geoA.then(data => {
+          return data === undefined? undefined: this.getList(data);
+        });
 
-      this.getGeo(addrA, addrB);
+        let mike = new result("A", "Whole Foods", 1, 2, 3);
+        let join = new result("B", "Foot Locker", 2, 3, 5);
 
-
-      //TODO get the list of real estates within 10 miles of each addresses
-      let mike = new result("Whole Foods", 1, 2, 3);
-      let join = new result("Foot Locker", 2, 3, 5);
-      let tmpRes = [mike, join];
-      let tmpHist = new history(tmpRes[0].name, tmpRes[0].distanceA, tmpRes[0].distanceB, addrA, addrB);
-      this.setState((prev) => {
+        let tmpRes = [mike, join];
+        this.setState((prev) => {
           return{
-          alert: isFound? 1: 0,
-          res: tmpRes,
-          hist: isFound? prev.hist: [tmpHist].concat(prev.hist)
-        };
-      });
-
-
+            alert: 0,
+            res: tmpRes,
+          };
+        });
+      }else{
+        this.setState(() => {
+          return {
+            alert: -1
+          };
+        });
+        this.resetAddr();
+      }
     }
+
   };
 
   render(){
@@ -195,7 +210,7 @@ class Distance extends Component{
           </div>
         </div>
         <div className="row">
-          <div className="col-md-4">
+          <div className="col-md-6">
             <h3>Panel</h3>
             <AddForm
               calculateAddr={this.calculateAddr}
@@ -205,16 +220,10 @@ class Distance extends Component{
               <MyMapComponent />
             </div>
           </div>
-          <div className="col-md-4">
+          <div className="col-md-6">
             <h3>Result</h3>
             <GetResult
               res={this.state.res}
-            />
-          </div>
-          <div className="col-md-4">
-            <h3>History</h3>
-            <GetHistory
-              hist={this.state.hist}
             />
           </div>
         </div>
@@ -231,7 +240,7 @@ const GoogleMapComponent = compose(
   withProps({
     googleMapURL: "https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=geometry,drawing,places&",
     loadingElement: <div style={{height: `100%`}}/>,
-    containerElement: <div style={{width: `585px`, height: `500px`}}/>,
+    containerElement: <div style={{width: `725px`, height: `500px`}}/>,
     mapElement: <div style={{height: `100%`}}/>
   }),
   withScriptjs,
@@ -288,16 +297,26 @@ class AddForm extends Component{
   render() {
         return (<form className="form-inline" onSubmit={this.props.calculateAddr}>
           <span className="badge badge-pill badge-success">A</span>
-          <div className="form-group mx-sm-4">
+          <div className="form-group col-md-4">
             <label className="sr-only">Address of A</label>
             <input type="text" className="form-control" placeholder="Address of A" name="addrA"/>
           </div>
           <span className="badge badge-pill badge-danger">B</span>
-          <div className="form-group mx-sm-4">
+          <div className="form-group col-md-4">
             <label className="sr-only">Address of B</label>
             <input type="text" className="form-control" placeholder="Address of B" name="addrB"/>
           </div>
           <button type="submit" className="btn btn-outline-primary">Confirm</button>
+
+          {/*<Autocomplete*/}
+            {/*style={{width: '90%'}}*/}
+            {/*onPlaceSelected={(place) => {*/}
+              {/*console.log(place);*/}
+            {/*}}*/}
+            {/*types={['(regions)']}*/}
+            {/*componentRestrictions={{country: "us"}}*/}
+          {/*/>*/}
+
         </form>);
   }
 }
@@ -314,6 +333,7 @@ class GetResult extends Component{
         <th>Name</th>
         <th>Distance From A</th>
         <th>Distance From B</th>
+        <th>Sum Of Distance</th>
       </tr>
       </thead>
       <tbody>
@@ -324,41 +344,13 @@ class GetResult extends Component{
             <td>{p.name}</td>
             <td>{p.distanceA}</td>
             <td>{p.distanceB}</td>
+            <td>{p.distanceA + p.distanceB}</td>
           </tr>
         )
       }))}
       </tbody>
     </table>
   );
-  }
-}
-
-/*History table to store the result
-* */
-class GetHistory extends Component{
-    render() {
-      return(<table className="table">
-        <thead className="thead-dark">
-        <tr>
-          <th>Name</th>
-          <th>Address of A</th>
-          <th>Address of B</th>
-          <th>Distance From A</th>
-          <th>Distance From B</th>
-        </tr>
-        </thead>
-        <tbody>
-        {this.props.hist.length > 0 && (this.props.hist.map((p) => {
-          return (<tr key={p.num}>
-            <td>{p.name}</td>
-            <td>{p.addrA}</td>
-            <td>{p.addrB}</td>
-            <td>{p.distanceA}</td>
-            <td>{p.distanceB}</td>
-          </tr>)}))}
-        </tbody>
-      </table>
-    );
   }
 }
 
