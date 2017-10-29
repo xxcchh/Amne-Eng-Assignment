@@ -12,3 +12,7 @@
 .function table{
     text-align: center;
 }
+
+.function #MyMap {
+    margin-top: 20px;
+}
