@@ -92,7 +92,7 @@ class Distance extends Component{
 
   // Prune input address
   static pruneAddr(s){
-    let exp = /[-\/\\^$*+?.()|[\]{}]/g;
+    let exp = /[\/\\^$*+?()|[\]{}]/g;
     if (exp.test(s)){
       return undefined;
     }
