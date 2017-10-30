@@ -247,10 +247,15 @@ class Distance extends Component{
               this.setState(() => {
                 return {
                   res: Distance.sortRes(finalRes),
-                  alert: 0
                 };
               });
-            })
+            }).then(() => {
+              if (this.state.res.length > 0){
+                this.setState({alert: 0});
+              }else{
+                this.setState({alert: 2});
+              }
+            });
         });
       }else{
         this.setState(() => {
