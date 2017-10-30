@@ -19,9 +19,6 @@ class result {
    this.distanceB = addrB
    this.sum = (Number(addrA) + Number(addrB)).toPrecision(5);
  }
- setNumber(num){
-   this.num = num;
- }
 }
 
 /*Geo class
@@ -69,12 +66,14 @@ class Distance extends Component{
     this.resetAddr = this.resetAddr.bind(this);
     this.getList = this.getList.bind(this);
     this.calculateAddr = this.calculateAddr.bind(this);
-    this.getResult = this.getResult.bind(this);
+    Distance.getResult = Distance.getResult.bind(this);
     this.state = {
       addrA: undefined,
       addrB: undefined,
       res: [],
-      alert: 1
+      marker: [],
+      alert: 1,
+      finish: false
     };
   }
 
@@ -84,7 +83,9 @@ class Distance extends Component{
       return {
         addrA: undefined,
         addrB: undefined,
-        res: []
+        res: [],
+        marker: [],
+        finish: false
       }
     });
   }
@@ -119,9 +120,19 @@ class Distance extends Component{
     return dist.toPrecision(5);
   }
 
+  // Sort the array by distance
+  static sortRes(arr){
+    return arr.sort(function (a, b) {
+      let x = a.sum;
+      let y = b.sum;
+      return ((x < y)? -1: ((x > y)? 1: 0));
+
+    })
+  }
+
   // Get result
-  getResult(geoTemp, idx, geoA, geoB){
-    return new result(geoTemp.id, geoTemp.address, geoTemp.miniaddr, idx,
+  static getResult(geoTemp, idx, geoA, geoB){
+    return new result(geoTemp.id, geoTemp.addr, geoTemp.miniaddr, idx,
             Distance.getDistance(geoTemp, geoA), Distance.getDistance(geoTemp, geoB));
   }
 
@@ -130,7 +141,6 @@ class Distance extends Component{
     let res;
     let defaultAddr = "Austin, TX, USA";
     res = fetch(url).then(res => res.json()).then(data => {
-      // console.log(data);
       if (data.status === "OK" && data.results.length > 0 &&
                 data.results[0].formatted_address !== defaultAddr){
         let loc =  data.results[0].geometry.location;
@@ -174,7 +184,8 @@ class Distance extends Component{
       if (data.results.length > 0 && data.status === "OK") {
         let tmp = data.results;
         return tmp.map((t) => {
-          return new geodata(t.place_id, t.vicinity, t.geometry.location.lat, t.geometry.location.lng, t.name);
+          return new geodata(t.place_id, t.vicinity,
+                    t.geometry.location.lat, t.geometry.location.lng, t.name);
         });
       }
     });
@@ -199,10 +210,14 @@ class Distance extends Component{
       if (res.valid){
         let geoRes = Promise.all([res.geoA, res.geoB]);
         geoRes.then((arr) => {
+            this.setState((prev) => {
+              return {
+                marker: prev.marker.concat([arr[0]]).concat([arr[1]])
+              }
+            });
             let geoARes = arr[0] === undefined? undefined: this.getList(arr[0]);
             let geoBRes = arr[1] === undefined? undefined: this.getList(arr[1]);
             let geoList = Promise.all([geoARes, geoBRes]);
-            // console.log(geoList);
             geoList.then((g) => {
               if (g[0] === undefined ||
                       g[1] === undefined){
@@ -212,26 +227,40 @@ class Distance extends Component{
                   }
                 });
               }else{
-                // Add A list
                 g[0].forEach((v) => {
+                  let tmp = Distance.getResult(v, this.state.res.length, arr[0], arr[1]);
                   this.setState((prev) => {
                     return {
-                      res: prev.res.concat([this.getResult(v, this.state.res.length, arr[0], arr[1])])
+                      res: prev.res.concat(tmp),
                     }
                   })
                 })
-                // Add B list
-                g[1].forEach((v, i) => {
+                g[1].forEach((v) => {
+                  let tmp = Distance.getResult(v, this.state.res.length, arr[0], arr[1]);
                   this.setState((prev) => {
                     return {
-                      res: prev.res.concat([this.getResult(v, this.state.res.length, arr[0], arr[1])])
-                    }
-                  })
+                      res: prev.res.concat(tmp),
+                  }})
                 })
               }
+            }).then(() => {
+              let finalRes = [];
+              let idRes = [];
+              this.state.res.forEach((e, v) => {
+                if (idRes.indexOf(e.id) < 0){
+                  idRes.push(e.id);
+                  finalRes.push(e);
+                }
+              })
+              this.setState(() => {
+                return {
+                  res: Distance.sortRes(finalRes),
+                };
+              });
+            }).then(() => {
+              this.setState({finish: true});
             })
         });
-
       }else{
         this.setState(() => {
           return {
@@ -241,7 +270,6 @@ class Distance extends Component{
         this.resetAddr();
       }
     }
-
   };
 
   render(){
@@ -260,7 +288,8 @@ class Distance extends Component{
               getGeo={this.getGeo}
             />
             <div id="MyMap">
-              <MyMapComponent />
+              {this.state.finish? <MyMapComponent marker={this.state.marker}/>:
+                      <MyMapComponent marker={[]}/>}
             </div>
           </div>
           <div className="col-md-6">
@@ -292,11 +321,11 @@ const GoogleMapComponent = compose(
   withGoogleMap
 )((props) =>
   <GoogleMap
-    defaultZoom={10}
-    defaultCenter={{lat: 32.0181602, lng: -99.7738947}}
-  >
-    <Marker label="A" position={{lat: 32.0181602, lng: -99.7738947}} onClick={props.onToggleOpen}/>
-    <Marker label="B" position={{lat: 32.02, lng: -99.6}} onClick={props.onToggleOpen}/>
+    defaultZoom={15}
+    defaultCenter={{lat: 30.307182, lng: -97.755996}}>
+
+    {props.isMarkerShown && <Marker position={{lat: 30.307182, lng: -97.755996}}/>}
+
   </GoogleMap>
 )
 
@@ -316,7 +345,7 @@ class MyMapComponent extends React.Component {
   delayedShowMarker = () => {
     setTimeout(() => {
       this.setState({ isMarkerShown: true })
-    }, 3000)
+    }, 500)
   }
 
   handleMarkerClick = () => {
@@ -328,8 +357,7 @@ class MyMapComponent extends React.Component {
     return (
       <GoogleMapComponent
         isMarkerShown={this.state.isMarkerShown}
-        onMarkerClick={this.handleMarkerClick}
-      />
+        marker={this.props.marker}/>
     )
   }
 
@@ -361,11 +389,12 @@ class AddForm extends Component{
 * */
 class GetResult extends Component{
   render() {
-      return ( <table classID="restable" className="table table-striped table-bordered">
+      return ( <table className="table table-striped table-bordered"
+                          cellSpacing="0" width="100%">
       <thead>
       <tr>
-        <th>#</th>
         <th>Name</th>
+        <th>Address</th>
         <th>Distance From A</th>
         <th>Distance From B</th>
         <th>Sum Of Distance</th>
@@ -375,8 +404,8 @@ class GetResult extends Component{
       {this.props.res.length > 0 && (this.props.res.map((p) =>{
         return (
           <tr key={p.num}>
-            <td>{p.num}</td>
             <td>{p.name}</td>
+            <td>{p.address}</td>
             <td>{p.distanceA}</td>
             <td>{p.distanceB}</td>
             <td>{p.sum}</td>
