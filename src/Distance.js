@@ -247,6 +247,7 @@ class Distance extends Component{
               this.setState(() => {
                 return {
                   res: Distance.sortRes(finalRes),
+                  alert: 0
                 };
               });
             })
