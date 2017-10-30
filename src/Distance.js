@@ -71,9 +71,7 @@ class Distance extends Component{
       addrA: undefined,
       addrB: undefined,
       res: [],
-      marker: [],
       alert: 1,
-      finish: false
     };
   }
 
@@ -84,8 +82,6 @@ class Distance extends Component{
         addrA: undefined,
         addrB: undefined,
         res: [],
-        marker: [],
-        finish: false
       }
     });
   }
@@ -125,8 +121,9 @@ class Distance extends Component{
     return arr.sort(function (a, b) {
       let x = a.sum;
       let y = b.sum;
+      x = Number(x);
+      y = Number(y);
       return ((x < y)? -1: ((x > y)? 1: 0));
-
     })
   }
 
@@ -210,11 +207,6 @@ class Distance extends Component{
       if (res.valid){
         let geoRes = Promise.all([res.geoA, res.geoB]);
         geoRes.then((arr) => {
-            this.setState((prev) => {
-              return {
-                marker: prev.marker.concat([arr[0]]).concat([arr[1]])
-              }
-            });
             let geoARes = arr[0] === undefined? undefined: this.getList(arr[0]);
             let geoBRes = arr[1] === undefined? undefined: this.getList(arr[1]);
             let geoList = Promise.all([geoARes, geoBRes]);
@@ -257,8 +249,6 @@ class Distance extends Component{
                   res: Distance.sortRes(finalRes),
                 };
               });
-            }).then(() => {
-              this.setState({finish: true});
             })
         });
       }else{
@@ -288,8 +278,7 @@ class Distance extends Component{
               getGeo={this.getGeo}
             />
             <div id="MyMap">
-              {this.state.finish? <MyMapComponent marker={this.state.marker}/>:
-                      <MyMapComponent marker={[]}/>}
+              <MyMapComponent />
             </div>
           </div>
           <div className="col-md-6">
@@ -356,8 +345,7 @@ class MyMapComponent extends React.Component {
   render() {
     return (
       <GoogleMapComponent
-        isMarkerShown={this.state.isMarkerShown}
-        marker={this.props.marker}/>
+        isMarkerShown={this.state.isMarkerShown}/>
     )
   }
 
@@ -394,6 +382,7 @@ class GetResult extends Component{
       <thead>
       <tr>
         <th>Name</th>
+        <th>Number</th>
         <th>Address</th>
         <th>Distance From A</th>
         <th>Distance From B</th>
