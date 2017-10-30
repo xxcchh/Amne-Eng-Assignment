@@ -382,7 +382,6 @@ class GetResult extends Component{
       <thead>
       <tr>
         <th>Name</th>
-        <th>Number</th>
         <th>Address</th>
         <th>Distance From A</th>
         <th>Distance From B</th>
